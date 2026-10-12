@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CareMap — Nagpur Healthcare Access & Resource Intelligence</title>
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- App Stylesheet -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <!-- Header / Navigation -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="brand-section">
+        <div class="brand-logo">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>
+            <path d="M12 5v6"/>
+            <path d="M9 8h6"/>
+          </svg>
+        </div>
+        <div>
+          <h1 class="brand-title">CareMap <span class="badge-nagpur">Nagpur</span></h1>
+          <p class="brand-subtitle">Healthcare Access & Resource Intelligence Platform</p>
+        </div>
+      </div>
+      
+      <div class="header-actions">
+        <div class="emergency-pill">
+          <span class="pulse-dot"></span>
+          Emergency: <strong>Dial 108 / 112</strong>
+        </div>
+        <button id="refreshOsmBtn" class="btn btn-outline" title="Sync live OpenStreetMap data">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="23 4 23 10 17 10"></polyline>
+            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+          </svg>
+          Sync OSM
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Emergency & Verification Disclaimer Banner -->
+  <section class="disclaimer-banner">
+    <div class="banner-inner">
+      <div class="banner-icon">ℹ️</div>
+      <div class="banner-text">
+        <strong>Important Medical Notice:</strong> CareMap provides healthcare discovery using OpenStreetMap and public directories.
+        Emergency capability tags reflect recorded dataset tags and do not guarantee live bed capacity or admission intake. For immediate life-threatening emergencies, always call <strong>108</strong> (National Ambulance Service) immediately.
+      </div>
+    </div>
+  </section>
+
+  <!-- Top Metric Cards -->
+  <section class="metrics-grid">
+    <div class="metric-card">
+      <div class="metric-icon teal">🏥</div>
+      <div class="metric-content">
+        <div class="metric-value" id="statTotalHospitals">—</div>
+        <div class="metric-label">Mapped Facilities</div>
+      </div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-icon red">🚨</div>
+      <div class="metric-content">
+        <div class="metric-value" id="statEmergencyCount">—</div>
+        <div class="metric-label">Emergency Ready Tags</div>
+      </div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-icon blue">📍</div>
+      <div class="metric-content">
+        <div class="metric-value" id="statTopLocality">—</div>
+        <div class="metric-label">Highest Density Hub</div>
+      </div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-icon green">📊</div>
+      <div class="metric-content">
+        <div class="metric-value" id="statDataCompleteness">—</div>
+        <div class="metric-label">Phone Listing Rate</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Main View Tabs -->
+  <div class="tab-container">
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="directoryTab">Directory & Map</button>
+      <button class="tab-btn" data-tab="gapAnalysisTab">Healthcare Gap Intelligence</button>
+      <button class="tab-btn" data-tab="methodologyTab">Data Sources & Limitations</button>
+    </div>
+  </div>
+
+  <main class="content-wrapper">
+    <!-- TAB 1: Directory & Map -->
+    <div id="directoryTab" class="tab-content active">
+      <!-- Search & Filter Controls Card -->
+      <div class="control-panel card">
+        <div class="controls-row">
+          <!-- Locality / Text Input -->
+          <div class="control-group flex-2">
+            <label for="localityInput">Nagpur Locality or Hospital Name</label>
+            <div class="input-with-icon">
+              <input type="text" id="localityInput" placeholder="e.g. Dharampeth, Sitabuldi, Sadar, Manish Nagar...">
+              <button id="searchLocalityBtn" class="btn btn-primary">Search</button>
+            </div>
+          </div>
+
+          <!-- Radius Selector -->
+          <div class="control-group">
+            <label for="radiusSelect">Search Radius</label>
+            <select id="radiusSelect">
+              <option value="5">5 km Radius</option>
+              <option value="10" selected>10 km Radius</option>
+              <option value="15">15 km Radius</option>
+              <option value="25">25 km Radius</option>
+            </select>
+          </div>
+
+          <!-- Geolocation Button -->
+          <div class="control-group">
+            <label>&nbsp;</label>
+            <button id="useLocationBtn" class="btn btn-teal">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polygon points="12 2 15 8 12 14 9 8 12 2"></polygon>
+              </svg>
+              Use My Location
+            </button>
+          </div>
+
+          <!-- View Entire City Button -->
+          <div class="control-group">
+            <label>&nbsp;</label>
+            <button id="viewAllBtn" class="btn btn-outline">View Entire City</button>
+          </div>
+        </div>
+
+        <!-- Filter Row -->
+        <div class="filter-row">
+          <div class="filter-item">
+            <label for="specialityFilter">Speciality:</label>
+            <select id="specialityFilter">
+              <option value="all">All Specialities</option>
+              <option value="Cardiology">Cardiology / Heart</option>
+              <option value="Emergency">Emergency / Trauma</option>
+              <option value="Neurology">Neurology / Neurosurgery</option>
+              <option value="Pediatrics">Pediatrics</option>
+              <option value="Orthopedics">Orthopedics</option>
+              <option value="General Medicine">General Medicine</option>
+              <option value="Oncology">Oncology / Cancer</option>
+            </select>
+          </div>
+
+          <div class="filter-item">
+            <label for="sourceFilter">Dataset Type:</label>
+            <select id="sourceFilter">
+              <option value="all">All Records (Verified & Samples)</option>
+              <option value="real" selected>Real Mapped Hospitals Only</option>
+              <option value="sample">Sample Simulations Only</option>
+            </select>
+          </div>
+
+          <div class="filter-item checkbox-item">
+            <label>
+              <input type="checkbox" id="emergencyOnlyCheckbox">
+              24/7 Emergency Listed Only
+            </label>
+          </div>
+
+          <div class="filter-active-status" id="activeFilterLabel">
+            Showing: <strong>All Nagpur Mapped Hospitals</strong>
+          </div>
+        </div>
+      </div>
+
+      <!-- Split Layout: Interactive Map + Hospital Cards -->
+      <div class="split-view">
+        <!-- Map Column -->
+        <div class="map-column card">
+          <div class="map-header">
+            <h3>Interactive Healthcare Map</h3>
+            <span class="map-hint">Click markers for details & directions</span>
+          </div>
+          <div id="leafletMap" class="map-canvas"></div>
+          <div class="map-legend">
+            <span class="legend-item"><span class="dot dot-teal"></span> Real Verified Hospital</span>
+            <span class="legend-item"><span class="dot dot-red"></span> Emergency Tagged</span>
+            <span class="legend-item"><span class="dot dot-amber"></span> Sample Simulation</span>
+            <span class="legend-item"><span class="dot dot-blue"></span> Your Location</span>
+          </div>
+        </div>
+
+        <!-- Directory Cards Column -->
+        <div class="list-column card">
+          <div class="list-header">
+            <div>
+              <h3>Facilities Directory</h3>
+              <p class="list-count" id="resultCountLabel">Loading facilities...</p>
+            </div>
+            <div class="sorting-controls">
+              <select id="sortSelect">
+                <option value="name">Sort: Name (A-Z)</option>
+                <option value="locality">Sort: Locality</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Loading Spinner -->
+          <div id="loader" class="loader-container">
+            <div class="spinner"></div>
+            <p>Fetching healthcare records...</p>
+          </div>
+
+          <!-- Empty State -->
+          <div id="emptyState" class="empty-state" style="display: none;">
+            <div class="empty-icon">🔍</div>
+            <h4>No hospitals found</h4>
+            <p>Try widening your search radius or selecting a different locality/speciality.</p>
+            <button id="resetSearchBtn" class="btn btn-outline">Reset Search</button>
+          </div>
+
+          <!-- Hospital List Container -->
+          <div id="hospitalList" class="hospital-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 2: Healthcare Gap Intelligence -->
+    <div id="gapAnalysisTab" class="tab-content">
+      <div class="gap-grid">
+        <!-- Locality Distribution Chart -->
+        <div class="card gap-card">
+          <h3>Hospital Distribution by Locality</h3>
+          <p class="section-desc">Identifies concentration in central hubs vs. outer suburban nodes across Nagpur.</p>
+          <div id="localityBars" class="chart-bars"></div>
+        </div>
+
+        <!-- Speciality Availability Chart -->
+        <div class="card gap-card">
+          <h3>Listed Speciality Breakdown</h3>
+          <p class="section-desc">Recorded medical services across verified facilities.</p>
+          <div id="specialityTags" class="speciality-chips-container"></div>
+        </div>
+      </div>
+
+      <!-- Actionable Gap Insights -->
+      <div class="card gap-card mt-4">
+        <h3>Identified Healthcare Resource Intelligence & Gaps</h3>
+        <p class="section-desc">Evidence-based observations on geographic access and data completeness.</p>
+        <div id="gapInsightsList" class="gap-insights-container"></div>
+      </div>
+    </div>
+
+    <!-- TAB 3: Data Sources & Limitations -->
+    <div id="methodologyTab" class="tab-content">
+      <div class="card text-card">
+        <h3>Data Sources, Governance & Hackathon Limitations</h3>
+        <hr class="divider">
+        <h4>1. Primary Data Sources</h4>
+        <ul>
+          <li><strong>OpenStreetMap (OSM) & Overpass API:</strong> Community-contributed healthcare facility geometries, nodes, and metadata for the Nagpur administrative region.</li>
+          <li><strong>Nominatim OpenStreetMap:</strong> Public geocoding engine for resolving locality names to coordinates.</li>
+          <li><strong>Curated Nagpur Verified Registry:</strong> Primary public healthcare landmarks (AIIMS Nagpur, GMCH, IGGMCH Mayo Hospital, Kingsway, Orange City Hospital, Wockhardt, Care Hospital, etc.).</li>
+        </ul>
+
+        <h4>2. Data Quality & Limitations Notice</h4>
+        <ul>
+          <li><strong>Completeness Disclaimer:</strong> This platform does NOT claim that every nursing home or clinic in Nagpur is indexed. Open-source data relies on volunteer mapping and public registry availability.</li>
+          <li><strong>No Live Bed or Doctor Capacity:</strong> CareMap does not claim real-time bed availability, ICU status, or on-duty doctor attendance. These require hospital information system (HIS) integration.</li>
+          <li><strong>Emergency Status:</strong> The emergency tag indicates recorded 24/7 or emergency infrastructure in OSM, not real-time admission eligibility. Always dial <strong>108</strong> in critical emergencies.</li>
+          <li><strong>Sample Simulation Records:</strong> Fictional records are clearly labeled as <code>Sample Simulation</code> to prevent deceptive metrics.</li>
+        </ul>
+      </div>
+    </div>
+  </main>
+
+  <!-- Modal for Hospital Detail View -->
+  <div id="hospitalModal" class="modal-overlay">
+    <div class="modal-card">
+      <button class="modal-close" id="modalCloseBtn">&times;</button>
+      <div id="modalContent"></div>
+    </div>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- App JS -->
+  <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
